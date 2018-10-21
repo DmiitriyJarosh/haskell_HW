@@ -28,12 +28,16 @@ eval t = case t of
         Con num -> case eval term2 of
           Con num1 -> Con (num + num1)
           otherwise -> Add (Con num) (eval term2)
-        Lam name term3 -> subst name (eval term2) term3
+        Lam name term3 -> case subst name (eval term2) term3 of
+	  Add (Con num1) (Con num2) -> Con (num1 + num2)
+	  otherwise -> subst name (eval term2) term3
         App term3 term4 -> eval (App (eval term3) (eval term4))
         Add term3 term4 -> eval (Add (eval term3) (eval term4))
       App term1 term2 -> case eval term1 of
         Var name -> App (Var name) (eval term2)
         Con num -> App (Con num) (eval term2)
-        Lam name term3 -> subst name (eval term2) term3
+        Lam name term3 -> case subst name (eval term2) term3 of
+	  Add (Con num1) (Con num2) -> Con (num1 + num2)
+	  otherwise -> subst name (eval term2) term3
         App term3 term4 -> eval (App (eval term3) (eval term4))
         Add term3 term4 -> eval (Add (eval term3) (eval term4))
