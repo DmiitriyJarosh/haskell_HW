@@ -33,7 +33,9 @@ translateReset term = case term of
 
 addT :: Term -> Term -> Term
 addT x y = case x of
-  Shift name body -> x
+  Shift name body -> case y of
+    Shift name1 body1 -> error "Syntax critical"
+    otherwise -> x
   otherwise -> y
 
 preEval :: Term -> (Term, Term)
@@ -50,7 +52,7 @@ preEval term = case term of
   Shift name body -> (TmVar name, Shift name body)
   TmRst fun name body -> (TmRst fun name (fst $ preEval body), snd $ preEval body)
   IfThenElse termCond termThen termElse ->
-      (IfThenElse (translateReset termCond) (translateReset termThen) (translateReset termElse), TmCst 0)
+      (IfThenElse (fst $ preEval termCond) (fst $ preEval termThen) (fst $ preEval termElse), addT (snd $ preEval termCond) (addT (snd $ preEval termThen) (snd $ preEval termElse)))
   IsNil term -> (IsNil (fst $ preEval term), snd $ preEval term)
   Head term -> (Head (fst $ preEval term), snd $ preEval term)
   Tail term -> (Tail (fst $ preEval term), snd $ preEval term)
@@ -188,8 +190,12 @@ parseString str = case parse mainParser "" (transformString str) of
                     Right r -> r
 
 myParse str = translateReset $ parseString str
+
+
+
 testY = "(\\ f -> (\\ x -> f$(x$x))$(\\ x -> f$(x$x)))"
 --fac' = (\\ fun -> (\\ n -> if n then (n*(fun$(n-1))) else 1))
+testSum0 = "(Y$(\\ fun -> (\\ n -> reset (if (isNil n) then 1 else (if (head n) then (head n)*(fun$(tail n)) else (shift q (q$0)))))))$([5,0])"
 test0Y = "(Ycomb$(\\ fun -> (\\ n -> if n then (n*(fun$(n+(-1)))) else 1)))$3"
 test0 = "((\\ f -> (\\ x -> f$(x$x))$(\\ x -> f$(x$x)))$(\\ fun -> (\\ n -> if n then (n*(fun$(n+(-1)))) else 1)))$3"
 test1 = "1+reset(1+(shift k k$2))" -- == 1+(+1)2 == 4
