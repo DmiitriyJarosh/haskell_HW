@@ -18,12 +18,13 @@ translateReset term = case term of
   TmVar x -> term
   TmCst x -> term
   Nil -> term
+  Add2Head body listTail -> Add2Head (translateReset body) (translateReset listTail)
   Ycomb -> term
   TmAbs name body -> TmAbs name (translateReset body)
   TmAdd terml termr -> TmAdd (translateReset terml) (translateReset termr)
   TmApp terml termr -> TmApp (translateReset terml) (translateReset termr)
   TmMult terml termr -> TmMult (translateReset terml) (translateReset termr)
-  Shift name body -> TmApp (TmCst 0) (TmCst 0) --to call mistake, no time to do it normally
+  Shift name body -> error "Shift without reset. Syntax critical"
   TmRst func name body -> TmRst func name (translateReset body)
   IfThenElse cond termT termF -> IfThenElse (translateReset cond) (translateReset termT) (translateReset termF)
   TmList body listTail -> TmList (translateReset body) (translateReset listTail)
@@ -58,12 +59,14 @@ preEval term = case term of
   Tail term -> (Tail (fst $ preEval term), snd $ preEval term)
   TmList body listTail ->
       (TmList (translateReset body) (translateReset listTail), TmCst 0)
+  Add2Head body listTail ->
+      (Add2Head (translateReset body) (translateReset listTail), TmCst 0)
 
 
 languageDef = emptyDef {
                         Token.identStart = letter,
                         Token.identLetter = alphaNum,
-                        Token.reservedOpNames = ["+", "-", ",", "$","*"],
+                        Token.reservedOpNames = ["+", "-", ",", "$","*", ":"],
                         Token.reservedNames = ["\\", "->", "Y", "reset", "shift", "[", "]", "isNil", "head", "tail", "if", "then", "else"]
                        }
 
@@ -76,6 +79,7 @@ integer = Token.integer lexer
 whiteSpace = Token.whiteSpace lexer
 symbol = Token.symbol lexer
 brackets = Token.brackets lexer
+commaSep = Token.commaSep lexer
 
 mainParser :: Parser Term
 mainParser = whiteSpace >> expression
@@ -89,16 +93,19 @@ operators = [
               [Infix (reservedOp "$" >> return TmApp) AssocLeft],
               [Infix (reservedOp "+" >> return TmAdd) AssocLeft],
               [Infix (reservedOp "*" >> return TmMult) AssocLeft],
-              [Infix (reservedOp "," >> return TmList) AssocRight]
+              [Infix (reservedOp ":" >> return Add2Head) AssocRight]
             ]
 
 
 
 term :: Parser Term
-term = listParse <|> nilParse <|> isNilParse <|> combYParse <|> headParse <|> tailParse <|> resetParse <|> shiftParse <|> lambdaParse <|> parens expression <|> ifThenElseParse <|> fmap TmVar identifier <|> fmap TmCst integer
+term = brackets getResult <|> nilParse <|> isNilParse <|> combYParse <|> headParse <|> tailParse <|> resetParse <|> shiftParse <|> lambdaParse <|> parens expression <|> ifThenElseParse <|> fmap TmVar identifier <|> fmap TmCst integer
 
-listParse :: Parser Term
-listParse = brackets expression
+getResult :: Parser Term
+getResult = listParse >>= return.foldr (TmList) Nil
+
+listParse :: Parser [Term]
+listParse = commaSep expression
 
 nilParse :: Parser Term
 nilParse = do
@@ -165,32 +172,20 @@ lambdaParse = do
          nameVar <- identifier
          reserved "->"
          body <- expression
-         return $ TmAbs nameVar body
+         return $ TmAbs (nameVar ++ "'") (updateName (nameVar) body)
 
 
------------Adding nil to end of lists in string
-
-findEndOfList :: (String, String) -> (String, String)
-findEndOfList (str,x:xs) = if x == ']' then findEndOfList (str ++ ",nil" ++ [x],xs) else findEndOfList (str ++ [x], xs)
-findEndOfList (str, []) = (str,[])
-
-forNilList :: (String,String) -> (String, String)
-forNilList (str, x:(x2:xs)) = if (x == '[') && (x2 == ',') then forNilList (str ++ [x], xs) else forNilList (str ++ [x], x2:xs)
-forNilList (str, [x]) = (str ++ [x], [])
-
-transformString :: String -> String
-transformString str = fst $ forNilList ([], fst (findEndOfList ([],str)))
-
----------------------------------------
 
 
 parseString :: String -> Term
-parseString str = case parse mainParser "" (transformString str) of
+parseString str = case parse mainParser "" str of
                     Left e -> error $ show e
                     Right r -> r
 
 myParse str = translateReset $ parseString str
 
+testCASeasy = "(\\ y -> (\\ x -> x+y))$(x+1))"
+testCAS = "(\\ x -> (\\ y -> (\\ x -> x+y))$(x+1))$5"
 
 
 testY = "(\\ f -> (\\ x -> f$(x$x))$(\\ x -> f$(x$x)))"

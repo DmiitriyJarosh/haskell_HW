@@ -5,7 +5,6 @@ import Eval
 import Parser
 
 main :: IO ()
---main = putStr "Заглушка"
 
 main = defaultMain delimccTests
 {-
@@ -49,15 +48,20 @@ delimccTests = testGroup "delimCC tests"
    --factorial 10
    testCase "Test 20 " $ assertEqual [] (Right (TmCst 3628800)) (eval $ myParse "(Y$(\\ fun -> (\\ n -> if n then (n*(fun$(n+(-1)))) else 1)))$10"),
    --mult of array
-   testCase "Test 21 " $ assertEqual [] (Right (TmCst 3628800)) (eval $ myParse "reset ((Y$(\\ fun -> (\\ n -> (if (isNil n) then 1 else ( if (head n) then (head n)*(fun$(tail n)) else (shift q (q$0)))))))$([1,2,3,4,5,6,7,8,9,10]))"),
+   testCase "Test 21 " $ assertEqual [] (Right (TmCst 3628800)) (eval $ myParse "(Y$(\\ fun -> (\\ n -> (if (isNil n) then 1 else ( if (head n) then (head n)*(fun$(tail n)) else 0)))))$([1,2,3,4,5,6,7,8,9,10])"),
    --list length
    testCase "Test 22 " $ assertEqual [] (Right (TmCst 3)) (eval $ myParse "(Y$(\\ fun -> (\\ n -> if (isNil n) then 0 else (1+(fun$(tail n))))))$[1,2,3]"),
    --list sum
-   testCase "Test 23 " $ assertEqual [] (Right (TmCst 6)) (eval $ myParse "(Y$(\\ fun -> (\\ n -> if (isNil n) then 0 else ((head n)+(fun$(tail n))))))$[1,2,3]")
+   testCase "Test 23 " $ assertEqual [] (Right (TmCst 6)) (eval $ myParse "(Y$(\\ fun -> (\\ n -> if (isNil n) then 0 else ((head n)+(fun$(tail n))))))$[1,2,3]"),
+   --app fun (\\u->u+1) but it will be a lot of lists
+   testCase "Test 24 " $ assertEqual [] (Right (TmList (TmCst 2) (TmList (TmCst 3) (TmList (TmCst 4) Nil)))) (eval $ myParse "(Y$(\\ fun -> (\\ n -> if (isNil n) then [] else ((((\\ u -> u+1)$(head n)):(fun$(tail n)))))))$[1,2,3]"),
+   --filter but it will be a lot of lists
+   testCase "Test 25 " $ assertEqual [] (Right (TmList (TmCst 1) (TmList (TmCst 3) Nil))) (eval $ myParse "(Y$(\\ fun -> (\\ n -> if (isNil n) then [] else (if ((head n)+(-2)) then (((head n):(fun$(tail n)))) else (fun$(tail n))))))$[1,2,3]"),
+   testCase "Test 26 " $ assertEqual [] (Right (TmCst 120)) (eval $ myParse "(Y$(\\ fun -> (\\ n -> if (isNil n) then 1 else (if (head n) then (if (fun$(tail n)) then (head n)*(fun$(tail n)) else 0) else 0))))$[1,2,3,4,5]")
   ]
 
 
-
+--"(Y$(\\ fun -> (\\ n -> if (isNil n) then [] else ((((\\ u -> u+1)$(head n)):(fun$(tail n)))))))$[1,2,3]"
 {-
 delimccTests = testGroup "delimCC tests" [evalTests, parserTests]
 

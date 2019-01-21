@@ -16,14 +16,15 @@ data Term =
   | IsNil Term
   | Head Term
   | Tail Term
+  | Add2Head Term Term
   | TmList Term Term
   | IfThenElse Term Term Term
   | TmAdd Term Term
   | TmApp Term Term
   | TmMult Term Term
   | TmCst Integer
-  | Reset Term --only while parsing
-  | Shift String Term --only while parsing
+  | Reset Term
+  | Shift String Term
   | TmRst Term String Term
   deriving (Show, Eq)
 
@@ -35,6 +36,7 @@ subst name src dest = case dest of
   TmApp termLeft termRight -> TmApp (subst name src termLeft) (subst name src termRight)
   TmMult termLeft termRight -> TmMult (subst name src termLeft) (subst name src termRight)
   TmCst num -> dest
+  Add2Head terml termr -> Add2Head (subst name src terml) (subst name src termr)
   Nil -> dest
   Ycomb -> dest
   TmList body listTail -> TmList (subst name src body) (subst name src listTail)
@@ -48,6 +50,26 @@ subst name src dest = case dest of
 
 type Error = String
 
+updateName :: String -> Term -> Term
+updateName name body = case body of
+  TmVar varName -> if varName == name then TmVar (name ++ "'") else body
+  TmAbs varName term -> if (name ++ "'") == varName then TmAbs (varName ++ "'") (updateName varName term) else TmAbs varName (updateName name term)
+  TmAdd termLeft termRight -> TmAdd (updateName name termLeft) (updateName name termRight)
+  TmApp termLeft termRight -> TmApp (updateName name termLeft) (updateName name termRight)
+  TmMult termLeft termRight -> TmMult (updateName name termLeft) (updateName name termRight)
+  TmCst num -> body
+  Add2Head terml termr -> Add2Head (updateName name terml) (updateName name termr)
+  Nil -> body
+  Ycomb -> body
+  TmList listBody listTail -> TmList (updateName name listBody) (updateName name listTail)
+  IsNil term -> IsNil (updateName name term)
+  Head term -> Head (updateName name term)
+  Tail term -> Tail (updateName name term)
+  IfThenElse cond termT termF -> IfThenElse (updateName name cond) (updateName name termT) (updateName name termF)
+  TmRst termFunc varName termBody -> if varName == name
+    then TmRst (updateName name termFunc) (varName ++ "'") (updateName name termBody)
+    else TmRst (updateName name termFunc) varName (updateName name termBody)
+
 combY = TmAbs "f" (TmApp (TmAbs "x" (TmApp (TmVar "f") (TmApp (TmVar "x") (TmVar "x")))) (TmAbs "x" (TmApp (TmVar "f") (TmApp (TmVar "x") (TmVar "x")))))
 
 eval :: Term -> Either Error Term
@@ -57,6 +79,10 @@ eval expr = case expr of
     Nil -> return expr
     TmAbs name body -> return expr
     TmCst num -> return expr
+    Add2Head termElem list -> eval termElem >>= (\x -> eval list >>= (\case
+        Nil -> return $ TmList x Nil
+        TmList body listTail -> return $ TmList x (TmList body listTail)
+        otherwise -> fail (show list ++ " is not a list")))
     TmAdd terml termr -> eval terml >>= (\case
         Nil -> fail ("Unexpected 'Nil'")
         Ycomb -> fail "Unexpected Ycomb combinator"
@@ -89,7 +115,7 @@ eval expr = case expr of
         Nil -> fail ("Unexpected 'Nil'")
         TmCst num -> fail ("`" ++ show num ++ "` is not a function")
         Ycomb -> eval (TmApp combY termr)
-        TmAbs name term3 -> eval (subst name termr term3))
+        TmAbs name body -> eval (subst name termr body))
     IfThenElse cond termT termF -> eval cond >>= (\case
       TmCst x -> if x /= 0 then eval termT else eval termF
       _ -> fail (show cond ++" cannot be condition in if statement"))
